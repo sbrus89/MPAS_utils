@@ -9,73 +9,84 @@ import subprocess
 
 nnodes_per_core = 40
 
-pwd = os.getcwd()
-
 start_date = '2012-10-01_00:00:00'
 restart_date = '2012-10-02_00:00:00'
 end_date = '2012-10-03_00:00:00'
 
-max_nodes = 2
+base_nodes = 32
+#base_nodes = 2
 
-#variables = ['normalVelocity','layerThickness']
-variables = ['ssh','ssh_sal']
+variables = ['normalVelocity','layerThickness']
+#variables = ['ssh','ssh_sal']
 
-#exe_opt = 'ocean_model_intel'
-#exe_opt_openmp = 'ocean_model_intel_openmp'
-#exe_opt = 'ocean_model_intel_debug'
-exe_opt = 'ocean_model_intel_shtns'
-exe_opt_openmp = 'ocean_model_intel_openmp_debug'
+exe = 'ocean_model_intel_9de43d0'
+exe_openmp = 'ocean_model_intel_openmp_9de43d0'
 
 exact_restart = True
 #exact_restart = False
-exact_partition = True
-#exact_tread = True
-exact_tread = False
 
-#restart_file = 'restarts/restart.'+end_date.replace(':','.')+'.nc'
-restart_file = 'initial_state.nc'
+exact_partition = True
+#exact_partition = False
+partition_nodes = [64,16]
+
+exact_thread = True
+#exact_thread = False
+threads = [1,2,4]
+
+restart_file = 'restarts/restart.'+end_date.replace(':','.')+'.nc'
+#restart_file = 'initial_state.nc'
+
+namelist_options = {'config_use_self_attraction_loading':'.false.'}
 
 ########################################################################
 ########################################################################
 
 def setup_namelist(restart):
 
-  f = open('namelist.ocean','r')
-  lines = f.read().splitlines()
-  f.close()
-
   if restart:
-    for i in range(len(lines)):
-       if lines[i].find('config_do_restart') >= 0 :
-         lines[i] = '    config_do_restart = .true.'
-         print(lines[i])
-       if lines[i].find('config_start_time') >= 0 :
-         lines[i] = "    config_start_time = 'file'"
-         print(lines[i])
-       if lines[i].find('config_run_duration') >= 0 :
-         lines[i] = "    config_run_duration = '00-00-01_00:00:00'"
-         print(lines[i])
-  else:
-    for i in range(len(lines)):
-       if lines[i].find('config_do_restart') >= 0 :
-         lines[i] = '    config_do_restart = .false.'
-         print(lines[i])
-       if lines[i].find('config_start_time') >= 0 :
-         lines[i] = "    config_start_time = '"+start_date+"'"
-         print(lines[i])
-       if lines[i].find('config_run_duration') >= 0 :
-         lines[i] = "    config_run_duration = '00-00-02_00:00:00'"
-         print(lines[i])
-   
-  f = open('namelist.ocean','w')
-  f.write('\n'.join(lines))
-  f.close()
 
-  if restart:
+    options = {
+               'config_do_restart':'.true',
+               'config_start_time':"'file'",
+               'config_run_duration':"'00-00-01_00:00:00'"
+              }
+
     f = open('Restart_timestamp','w')
     f.write(restart_date)
     print(restart_date)
     f.close()
+
+  else:
+
+    options = {
+               'config_do_restart':'.false.',
+               'config_start_time':"'"+start_date+"'",
+               'config_run_duration':"'00-00-02_00:00:00'"
+              }
+
+  modify_namelist(options)
+
+
+########################################################################
+########################################################################
+
+def modify_namelist(options):
+
+  print('namelist.ocean update:')
+
+  f = open('namelist.ocean','r')
+  lines = f.read().splitlines()
+  f.close()
+
+  for opt in options:
+    for i in range(len(lines)):
+      if lines[i].find(opt) >= 0:
+        lines[i] = '    ' + opt + ' = '+options[opt]
+        print(lines[i])
+
+  f = open('namelist.ocean','w')
+  f.write('\n'.join(lines))
+  f.close()
 
 ########################################################################
 ########################################################################
@@ -86,6 +97,7 @@ def setup_streams():
   lines = f.read().splitlines()
   f.close()
 
+  print('streams.ocean update:')
   restart_stream = False
   for i in range(len(lines)):
      if lines[i].find('<immutable_stream name="restart"') >= 0 :
@@ -121,7 +133,7 @@ def run(nds,exe='ocean_model',threads=1):
     print(cmd)
   
   cmd = ' '.join(['gpmetis', 'graph.info', str(np)])
-  subprocess.call(cmd,shell=True)
+  subprocess.call(cmd,shell=True,stdout=subprocess.DEVNULL)
   print(cmd)
 
   print("\n")
@@ -133,7 +145,10 @@ def run(nds,exe='ocean_model',threads=1):
   os.environ['OMP_NUM_THREADS'] = str(threads)
   print('OMP_NUM_THREADS = '+str(threads))
 
-  cmd = ' '.join(['srun', '--mpi=pmi2','-N',str(nds),'-n', str(np),'--kill-on-bad-exit','-l','--cpu_bind=cores','-c','1','-m','plane=40','./ocean_model', '-n', 'namelist.ocean', '-s', 'streams.ocean'])
+  cmd = ' '.join(['srun', '--mpi=pmi2',
+                          '-N',str(nds),'-n', str(np),
+                          '--kill-on-bad-exit','-l','--cpu_bind=cores','-c','1','-m','plane=40',
+                          './ocean_model', '-n', 'namelist.ocean', '-s', 'streams.ocean'])
   subprocess.check_call(cmd,shell=True)
   print(cmd)
 
@@ -174,24 +189,26 @@ def verify(restart_file,suffix_base,suffix2):
   lines = output.decode('utf-8').splitlines()
 
   comparisons = []
-  BFB = False 
+  BFB = True 
   for line in lines:
     for var in variables:
       if line.find(var+' = ') >= 0:
         comparisons.append(line)
-        if line.split('=')[1] == ' 0 ;':
-          BFB = True
+        if line.split('=')[1] != ' 0 ;':
+          BFB = False
 
   print(comparisons)
-  print('Pass: ',BFB)
+  print('Pass: ',BFB, flush=True)
 
 ########################################################################
 ########################################################################
 
 if __name__ == '__main__':
 
+  pwd = os.getcwd()
   os.chdir(pwd)
 
+  modify_namelist(namelist_options)
 
   print('\n')
   print(72*'-')
@@ -200,89 +217,57 @@ if __name__ == '__main__':
 
   setup_streams()
   setup_namelist(restart=False)
-  run(max_nodes,exe_opt)
-  suffix_base = 'base_n'+str(max_nodes)
+  run(base_nodes,exe)
+  suffix_base = 'base_n'+str(base_nodes)
   rename(restart_file,suffix_base)
 
 
   if exact_restart:
+
     print('\n')
     print(72*'-')
     print('Restart Run')
     print(72*'-')
 
     setup_namelist(restart=True)
-    run(max_nodes,exe_opt)
-    suffix2 = 'restart_n'+str(max_nodes)
+    run(base_nodes,exe)
+    suffix2 = 'restart_n'+str(base_nodes)
     rename(restart_file,suffix2)
   
     verify(restart_file,suffix_base,suffix2)
 
 
   if exact_partition:
-    print('\n')
-    print(72*'-')
-    print('Partition Run: half nodes')
-    print(72*'-')
 
-    half_nodes = int(max_nodes/2)
-    setup_namelist(restart=False)
-    run(half_nodes,exe_opt)
-    suffix3 = 'partition_n'+str(half_nodes)
-    rename(restart_file,suffix3)
+    for nds in partition_nodes:
+
+      print('\n')
+      print(72*'-')
+      print('Partition Run: '+str(nds)+' nodes')
+      print(72*'-')
+
+      setup_namelist(restart=False)
+      run(nds,exe)
+      suffix = 'partition_n'+str(nds)
+      rename(restart_file,suffix)
   
-    verify(restart_file,suffix_base,suffix3)
+      verify(restart_file,suffix_base,suffix)
 
-    print('\n')
-    print(72*'-')
-    print('Partition Run: double nodes')
-    print(72*'-')
 
-    double_nodes = int(max_nodes*2)
-    setup_namelist(restart=False)
-    run(double_nodes,exe_opt)
-    suffix3 = 'partition_n'+str(double_nodes)
-    rename(restart_file,suffix3)
+  if exact_thread:
+
+    for thrds in threads:
+
+      print('\n')
+      print(72*'-')
+      print('Thread Run: '+str(thrds)+' threads')
+      print(72*'-')
+
+      setup_namelist(restart=False)
+      run(base_nodes,exe_openmp,thrds)
+      suffix = 'thread_n'+str(base_nodes)+'_t'+str(thrds)
+      rename(restart_file,suffix)
   
-    verify(restart_file,suffix_base,suffix3)
+      verify(restart_file,suffix_base,suffix)
 
-  if exact_tread:
-    print('\n')
-    print(72*'-')
-    print('Thread Run: 1')
-    print(72*'-')
-
-    threads = 1
-    setup_namelist(restart=False)
-    run(max_nodes,exe_opt_openmp,threads)
-    suffix4 = 'thread_n'+str(max_nodes)+'_t'+str(threads)
-    rename(restart_file,suffix4)
-  
-    verify(restart_file,suffix_base,suffix4)
-
-    print('\n')
-    print(72*'-')
-    print('Thread Run: 2')
-    print(72*'-')
-
-    threads = 2
-    setup_namelist(restart=False)
-    run(max_nodes,exe_opt_openmp,threads)
-    suffix4 = 'thread_n'+str(max_nodes)+'_t'+str(threads)
-    rename(restart_file,suffix4)
-  
-    verify(restart_file,suffix_base,suffix4)
-
-    print('\n')
-    print(72*'-')
-    print('Thread Run: 4')
-    print(72*'-')
-
-    threads = 4
-    setup_namelist(restart=False)
-    run(max_nodes,exe_opt_openmp,threads)
-    suffix4 = 'thread_n'+str(max_nodes)+'_t'+str(threads)
-    rename(restart_file,suffix4)
-  
-    verify(restart_file,suffix_base,suffix4)
 
