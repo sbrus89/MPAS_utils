@@ -5,13 +5,13 @@ import os
 import shutil
 import glob
 import subprocess
+import datetime
 
 
 nnodes_per_core = 40
 
 start_date = '2012-10-01_00:00:00'
-restart_date = '2012-10-02_00:00:00'
-end_date = '2012-10-03_00:00:00'
+end_date = '2012-10-02_00:00:00'
 
 base_nodes = 32
 #base_nodes = 2
@@ -38,34 +38,60 @@ restart_file = 'restarts/restart.'+end_date.replace(':','.')+'.nc'
 
 namelist_options = {'config_use_self_attraction_loading':'.false.'}
 
+frmt = '%Y-%m-%d_%H:%M:%S'
 ########################################################################
 ########################################################################
 
 def setup_namelist(restart):
 
+  start_datetime = datetime.datetime.strptime(start_date,frmt)
+  end_datetime = datetime.datetime.strptime(end_date,frmt)
+  length = end_datetime - start_datetime
+
   if restart:
 
+    restart_length = length/2
+    restart_date = start_datetime + restart_length
+    duration = strfdelta(restart_length)
+
+    # Set namelist options for restart run
     options = {
                'config_do_restart':'.true',
                'config_start_time':"'file'",
-               'config_run_duration':"'00-00-01_00:00:00'"
+               'config_run_duration':duration
               }
 
     f = open('Restart_timestamp','w')
-    f.write(restart_date)
-    print(restart_date)
+    f.write(restart_date.strftime(frmt))
+    print(restart_date.strftime(frmt))
     f.close()
 
   else:
 
+    duration = strfdelta(length)
+    # Set namelist options for full run 
     options = {
                'config_do_restart':'.false.',
                'config_start_time':"'"+start_date+"'",
-               'config_run_duration':"'00-00-02_00:00:00'"
+               'config_run_duration':duration
               }
 
   modify_namelist(options)
 
+
+########################################################################
+########################################################################
+
+def strfdelta(tdelta):
+
+  d = {"D": tdelta.days}
+  hours, rem = divmod(tdelta.seconds, 3600)
+  minutes, seconds = divmod(rem, 60)
+  d["H"] = '{:02d}'.format(hours)
+  d["M"] = '{:02d}'.format(minutes)
+  d["S"] = '{:02d}'.format(seconds)
+
+  return "'00-00-{D}_{H}:{M}:{S}'".format(**d)
 
 ########################################################################
 ########################################################################
@@ -93,6 +119,14 @@ def modify_namelist(options):
 
 def setup_streams():
 
+  start_datetime = datetime.datetime.strptime(start_date,frmt)
+  end_datetime = datetime.datetime.strptime(end_date,frmt)
+  length = end_datetime - start_datetime
+
+  restart_length = length/2
+  duration = strfdelta(restart_length)
+  duration = duration.replace("'",'')
+
   f = open('streams.ocean','r')
   lines = f.read().splitlines()
   f.close()
@@ -105,7 +139,7 @@ def setup_streams():
      if restart_stream:
        if lines[i].find('output_interval=') >= 0 :
          line_split = lines[i].split('"')
-         line_split[1] = '00-00-01_00:00:00'
+         line_split[1] = duration
          lines[i] = '"'.join(line_split)
          print(lines[i])
        if lines[i].find('filename_template=') >= 0 :
@@ -198,7 +232,7 @@ def verify(restart_file,suffix_base,suffix2):
           BFB = False
 
   print(comparisons)
-  print('Pass: ',BFB, flush=True)
+  print('Pass: '+str(BFB), flush=True)
 
 ########################################################################
 ########################################################################
