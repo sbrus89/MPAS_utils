@@ -6,37 +6,46 @@ import shutil
 import glob
 import subprocess
 import datetime
+import math
 
 
-nnodes_per_core = 40
+ncores_per_core = 40
 
 start_date = '2012-10-01_00:00:00'
-end_date = '2012-10-02_00:00:00'
+#end_date = '2012-10-02_00:00:00'
+end_date = '2012-10-01_01:00:00'
 
-base_nodes = 32
-#base_nodes = 2
+#base_cores = 1280 
+base_cores = 20 
 
 variables = ['normalVelocity','layerThickness']
 #variables = ['ssh','ssh_sal']
 
-exe = 'ocean_model_intel_9de43d0'
+exe = 'ocean_model_intel_shtns_9de43d0'
 exe_openmp = 'ocean_model_intel_openmp_9de43d0'
 
-exact_restart = True
-#exact_restart = False
+#exact_restart = True
+exact_restart = False
 
 exact_partition = True
 #exact_partition = False
-partition_nodes = [64,16]
+#partition_cores = [2560,640]
+partition_cores = [40]
 
-exact_thread = True
-#exact_thread = False
+#exact_thread = True
+exact_thread = False
 threads = [1,2,4]
 
 restart_file = 'restarts/restart.'+end_date.replace(':','.')+'.nc'
 #restart_file = 'initial_state.nc'
 
-namelist_options = {'config_use_self_attraction_loading':'.false.'}
+namelist_options = {
+                    #'config_use_self_attraction_loading':'.false.',
+                    'config_use_self_attraction_loading':'.true.',
+                    'config_self_attraction_loading_compute_interval':'00:00:30',
+                    #'config_use_parallel_self_attraction_loading':'.false.'
+                    'config_use_parallel_self_attraction_loading':'.true.'
+                   }
 
 frmt = '%Y-%m-%d_%H:%M:%S'
 ########################################################################
@@ -158,15 +167,15 @@ def setup_streams():
 ########################################################################
 ########################################################################
 
-def run(nds,exe='ocean_model',threads=1):
-  np = nds*nnodes_per_core
+def run(cores,exe='ocean_model',threads=1):
+  nodes = int(math.ceil(cores/ncores_per_core))
 
   if exe != 'ocean_model':
     cmd = 'ln -sf '+exe+' ocean_model'
     subprocess.call(cmd,shell=True)
     print(cmd)
   
-  cmd = ' '.join(['gpmetis', 'graph.info', str(np)])
+  cmd = ' '.join(['gpmetis', 'graph.info', str(cores)])
   subprocess.call(cmd,shell=True,stdout=subprocess.DEVNULL)
   print(cmd)
 
@@ -180,7 +189,7 @@ def run(nds,exe='ocean_model',threads=1):
   print('OMP_NUM_THREADS = '+str(threads))
 
   cmd = ' '.join(['srun', '--mpi=pmi2',
-                          '-N',str(nds),'-n', str(np),
+                          '-N',str(nodes),'-n', str(cores),
                           '--kill-on-bad-exit','-l','--cpu_bind=cores','-c','1','-m','plane=40',
                           './ocean_model', '-n', 'namelist.ocean', '-s', 'streams.ocean'])
   subprocess.check_call(cmd,shell=True)
@@ -251,8 +260,8 @@ if __name__ == '__main__':
 
   setup_streams()
   setup_namelist(restart=False)
-  run(base_nodes,exe)
-  suffix_base = 'base_n'+str(base_nodes)
+  run(base_cores,exe)
+  suffix_base = 'base_n'+str(base_cores)
   rename(restart_file,suffix_base)
 
 
@@ -264,8 +273,8 @@ if __name__ == '__main__':
     print(72*'-')
 
     setup_namelist(restart=True)
-    run(base_nodes,exe)
-    suffix2 = 'restart_n'+str(base_nodes)
+    run(base_cores,exe)
+    suffix2 = 'restart_n'+str(base_cores)
     rename(restart_file,suffix2)
   
     verify(restart_file,suffix_base,suffix2)
@@ -273,16 +282,16 @@ if __name__ == '__main__':
 
   if exact_partition:
 
-    for nds in partition_nodes:
+    for cores in partition_cores:
 
       print('\n')
       print(72*'-')
-      print('Partition Run: '+str(nds)+' nodes')
+      print('Partition Run: '+str(cores)+' cores')
       print(72*'-')
 
       setup_namelist(restart=False)
-      run(nds,exe)
-      suffix = 'partition_n'+str(nds)
+      run(cores,exe)
+      suffix = 'partition_n'+str(cores)
       rename(restart_file,suffix)
   
       verify(restart_file,suffix_base,suffix)
@@ -298,8 +307,8 @@ if __name__ == '__main__':
       print(72*'-')
 
       setup_namelist(restart=False)
-      run(base_nodes,exe_openmp,thrds)
-      suffix = 'thread_n'+str(base_nodes)+'_t'+str(thrds)
+      run(base_cores,exe_openmp,thrds)
+      suffix = 'thread_n'+str(base_cores)+'_t'+str(thrds)
       rename(restart_file,suffix)
   
       verify(restart_file,suffix_base,suffix)
