@@ -164,7 +164,7 @@ if setup_testcases == '' or setup_testcases == True:
             else:
                 setup = 'y'
         else:
-            setup == 'y'
+            setup = 'y'
         if setup == 'y':
           ntest = ntest + 1
           command = command + f'; compass setup -t {test} -w {workdir}'
