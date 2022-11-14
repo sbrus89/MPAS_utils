@@ -17,6 +17,9 @@ debug = cfg['debug']
 testcases = cfg['testcases']
 workdir = cfg['workdir']
 run = cfg['run']
+e3sm_remote = cfg['e3sm_remote']
+e3sm_branch = cfg['e3sm_branch']
+e3sm_commit= cfg['e3sm_commit']
 
 update_branch = ''
 if 'update_branch' in cfg:
@@ -33,6 +36,15 @@ if 'compile_mpas' in cfg:
 setup_testcases = ''
 if 'setup_testcases' in cfg:
     setup_testcases = cfg['setup_testcases']
+e3sm_remote= ''
+if 'e3sm_remote' in cfg:
+    e3sm_remote= cfg['e3sm_remote']
+e3sm_branch= ''
+if 'e3sm_branch' in cfg:
+    e3sm_branch= cfg['e3sm_branch']
+e3sm_commit= ''
+if 'e3sm_commit' in cfg:
+    e3sm_commit= cfg['e3sm_commit']
 
 
 
@@ -124,6 +136,24 @@ subprocess.check_call('module load git; git submodule update --init --recursive'
 
 
 os.chdir('E3SM-Project/components/mpas-ocean')
+if e3sm_remote != '' and e3sm_branch != '':
+  print('\n')
+  print('------------------------------------------')
+  print('E3SM remote checkout')
+  print('------------------------------------------')
+  subprocess.check_call(f'module load git; git fetch {e3sm_remote} {e3sm_branch}; git checkout FETCH_HEAD', shell=True)
+
+
+
+if e3sm_commit != '':
+  print('\n')
+  print('------------------------------------------')
+  print('E3SM commit checkout')
+  print('------------------------------------------')
+  subprocess.check_call(f'git checkout {e3sm_commit}', shell=True)
+
+
+
 if not os.path.exists('ocean_model'):
     compile_mpas = True
 if compile_mpas == '' or compile_mpas == True:
