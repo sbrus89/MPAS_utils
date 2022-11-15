@@ -3,53 +3,103 @@ import subprocess
 import yaml
 import glob
 
+
+####################################################
+# Handle input options
+####################################################
+
 f = open('branch.config','r')
 cfg = yaml.load(f, Loader=yaml.Loader)
 
+# Path to master subtree branch directory
 compass_master = cfg['compass_master']
-branch_name = cfg['branch_name']
-remote_branch = cfg['remote_branch']
-master_branch = cfg['master_branch']
-miniconda_path = cfg['miniconda_path']
-mpi = cfg['mpi']
-make_target = cfg['make_target']
-debug = cfg['debug']
-testcases = cfg['testcases']
-workdir = cfg['workdir']
-run = cfg['run']
-e3sm_remote = cfg['e3sm_remote']
-e3sm_branch = cfg['e3sm_branch']
-e3sm_commit= cfg['e3sm_commit']
 
+# Name of subtree branch to create
+branch_name = cfg['branch_name']
+
+# Remote compass branch to checkout  
+remote_branch = cfg['remote_branch']
+
+# Master compass branch to use for local merge
+master_branch = cfg['master_branch']
+
+# Path to miniconda installation
+miniconda_path = cfg['miniconda_path']
+
+# MPI implementation to use for conda package install
+mpi = cfg['mpi']
+
+# Make target for MPAS-O compilation
+make_target = cfg['make_target']
+
+# Option for using debug flags for MPAS-O compilation
+debug = cfg['debug']
+
+# List of testcases to setup
+testcases = cfg['testcases']
+
+# Work directory to use for test case setup
+workdir = cfg['workdir']
+
+# Option to update the subtree branch with the remote branch HEAD
 update_branch = ''
 if 'update_branch' in cfg:
     update_branch = cfg['update_branch']
+
+# Option to perform local merge to master compass branch
 local_merge = True
 if 'local_merge' in cfg:
     local_merge = cfg['local_merge']
+
+# Option to configure the conda environment
 configure_conda = ''
 if 'configure_conda' in cfg:
     configure_conda = cfg['configure_conda']
+
+# Option to compile MPAS-O
 compile_mpas = ''
 if 'compile_mpas' in cfg:
     compile_mpas = cfg['compile_mpas']
+
+# Option to setup list of testcases
 setup_testcases = ''
 if 'setup_testcases' in cfg:
     setup_testcases = cfg['setup_testcases']
+
+# Option to submit test case jobs
+run = ''
+if 'run' in cfg:
+    run = cfg['run']
+
+# Remote to use for E3SM checkout (optional)
 e3sm_remote= ''
 if 'e3sm_remote' in cfg:
     e3sm_remote= cfg['e3sm_remote']
+
+# Branch to use for E3SM checkout (optional)
 e3sm_branch= ''
 if 'e3sm_branch' in cfg:
     e3sm_branch= cfg['e3sm_branch']
+
+# Commit to use for E3SM checkout (optional)
 e3sm_commit= ''
 if 'e3sm_commit' in cfg:
     e3sm_commit= cfg['e3sm_commit']
 
 
 
+####################################################
+# Begin setup  
+####################################################
+
+
+# Enter the master branch subtree directory
 os.chdir(compass_master)
 
+# Fetch all remote compass branches
+#   (It is assumed that the remote for the compass branch
+#    that is to be checked out in the next step has been 
+#    added previously)
 print('\n')
 print('------------------------------------------')
 print('Fetching remote branches')
@@ -57,7 +107,7 @@ print('------------------------------------------')
 subprocess.check_call('git fetch --all', shell=True)
 
 
-
+# Create a worktree compass branch to be used for testing 
 print('\n')
 print('------------------------------------------')
 print('Creating worktree branch')
@@ -69,7 +119,8 @@ except:
 os.chdir(f'../{branch_name}')
 
 
-
+# Optionally update compass branch if a worktree branch has been previously created
+# and the remote branch has newer commits
 if update_branch == '' or update_branch == True:
     print('\n')
     print('------------------------------------------')
@@ -90,7 +141,7 @@ if update_branch == '' or update_branch == True:
         print('local and remote branches match')
 
 
-
+# Optionally rebase remote compass branch onto master 
 if local_merge == True:
     print('\n')
     print('------------------------------------------')
@@ -102,7 +153,7 @@ if local_merge == True:
     subprocess.check_call(f'module load git; git rebase {master_branch}', shell=True)
 
 
-
+# Configure the conda environment for the worktree branch
 load_scripts = glob.glob('load_dev_compass*.sh')
 if len(load_scripts) == 0:
     configure_conda = True
@@ -126,16 +177,8 @@ load_scripts = glob.glob('load_dev_compass*.sh')
 load_script = max(load_scripts, key=os.path.getctime)
 
 
-
-print('\n')
-print('------------------------------------------')
-print('Submodule checkout')
-print('------------------------------------------')
-subprocess.check_call('module load git; git submodule update --init --recursive', shell=True)
-
-
-
-os.chdir('E3SM-Project/components/mpas-ocean')
+# Optionally checkout a specific remote E3SM branch to be used in testing
+os.chdir('E3SM-Project')
 if e3sm_remote != '' and e3sm_branch != '':
   print('\n')
   print('------------------------------------------')
@@ -144,7 +187,7 @@ if e3sm_remote != '' and e3sm_branch != '':
   subprocess.check_call(f'module load git; git fetch {e3sm_remote} {e3sm_branch}; git checkout FETCH_HEAD', shell=True)
 
 
-
+# Optionally checkout a specific remote E3SM commit
 if e3sm_commit != '':
   print('\n')
   print('------------------------------------------')
@@ -153,7 +196,16 @@ if e3sm_commit != '':
   subprocess.check_call(f'git checkout {e3sm_commit}', shell=True)
 
 
+# Perform E3SM submodule checkout 
+print('\n')
+print('------------------------------------------')
+print('Submodule checkout')
+print('------------------------------------------')
+subprocess.check_call('module load git; git submodule update --init --recursive', shell=True)
 
+
+# Compile MPAS-Ocean
+os.chdir('components/mpas-ocean')
 if not os.path.exists('ocean_model'):
     compile_mpas = True
 if compile_mpas == '' or compile_mpas == True:
@@ -178,7 +230,7 @@ if compile_mpas == '' or compile_mpas == True:
         subprocess.check_call(f'source ../../../{load_script}; make clean; make {make_target} DEBUG={use_debug}', shell=True)
 
 
-
+# Setup specified testcases
 if setup_testcases == '' or setup_testcases == True:
     print('\n')
     print('------------------------------------------')
@@ -202,7 +254,7 @@ if setup_testcases == '' or setup_testcases == True:
         subprocess.check_call(command, shell=True)
 
 
-
+# Run specified testcases
 if run:
     print('\n')
     print('------------------------------------------')
@@ -211,7 +263,7 @@ if run:
     dependency = ''
     for test in testcases:
             os.chdir(f'{workdir}/{test}')
-            output = subprocess.check_output(f'sbatch {dependency} compass_job_script.sh', shell=True)
+            output = subprocess.check_output(f'sbatch {dependency} job_script.sh', shell=True)
             print(output) 
             jobid = output.split()[-1].decode('utf-8')
             dependency = f'--dependency=afterok:{jobid}' 
