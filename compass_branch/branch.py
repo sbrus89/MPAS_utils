@@ -177,6 +177,15 @@ load_scripts = glob.glob('load_dev_compass*.sh')
 load_script = max(load_scripts, key=os.path.getctime)
 
 
+# Perform E3SM submodule checkout 
+print('\n')
+print('------------------------------------------')
+print('Submodule checkout')
+print('------------------------------------------')
+subprocess.check_call('module load git; git submodule update --init --recursive', shell=True)
+update_e3sm_submodules = False
+
+
 # Optionally checkout a specific remote E3SM branch to be used in testing
 os.chdir('E3SM-Project')
 if e3sm_remote != '' and e3sm_branch != '':
@@ -185,6 +194,7 @@ if e3sm_remote != '' and e3sm_branch != '':
   print('E3SM remote checkout')
   print('------------------------------------------')
   subprocess.check_call(f'module load git; git fetch {e3sm_remote} {e3sm_branch}; git checkout FETCH_HEAD', shell=True)
+  update_e3sm_submodules = True
 
 
 # Optionally checkout a specific remote E3SM commit
@@ -194,18 +204,21 @@ if e3sm_commit != '':
   print('E3SM commit checkout')
   print('------------------------------------------')
   subprocess.check_call(f'git checkout {e3sm_commit}', shell=True)
+  update_e3sm_submodules = True
 
 
-# Perform E3SM submodule checkout 
-print('\n')
-print('------------------------------------------')
-print('Submodule checkout')
-print('------------------------------------------')
-subprocess.check_call('module load git; git submodule update --init --recursive', shell=True)
+# Perform E3SM submodule checkout if E3SM commit has been updated
+os.chdir('../')
+if update_e3sm_submodules:
+    print('\n')
+    print('------------------------------------------')
+    print('Submodule checkout')
+    print('------------------------------------------')
+    subprocess.check_call('module load git; git submodule update --init --recursive', shell=True)
 
 
 # Compile MPAS-Ocean
-os.chdir('components/mpas-ocean')
+os.chdir('E3SM-Project/components/mpas-ocean')
 if not os.path.exists('ocean_model'):
     compile_mpas = True
 if compile_mpas == '' or compile_mpas == True:
