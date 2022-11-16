@@ -180,7 +180,7 @@ load_script = max(load_scripts, key=os.path.getctime)
 # Perform E3SM submodule checkout 
 print('\n')
 print('------------------------------------------')
-print('Submodule checkout')
+print('Compass submodule checkout')
 print('------------------------------------------')
 subprocess.check_call('module load git; git submodule update --init --recursive', shell=True)
 update_e3sm_submodules = False
@@ -208,13 +208,13 @@ if e3sm_commit != '':
 
 
 # Perform E3SM submodule checkout if E3SM commit has been updated
-os.chdir('../')
 if update_e3sm_submodules:
     print('\n')
     print('------------------------------------------')
-    print('Submodule checkout')
+    print('E3SM submodule update')
     print('------------------------------------------')
     subprocess.check_call('module load git; git submodule update --init --recursive', shell=True)
+os.chdir('../')
 
 
 # Compile MPAS-Ocean
@@ -224,7 +224,7 @@ if not os.path.exists('ocean_model'):
 if compile_mpas == '' or compile_mpas == True:
     print('\n')
     print('------------------------------------------')
-    print('Compile mpas-ocean')
+    print('Compile MPAS-Ocean')
     print('------------------------------------------')
     if compile_mpas == '':
         if os.path.exists('ocean_model'):
@@ -267,7 +267,7 @@ if setup_testcases == '' or setup_testcases == True:
         subprocess.check_call(command, shell=True)
 
 
-# Run specified testcases
+# Run specified testcases as batch jobs with dependencies
 if run:
     print('\n')
     print('------------------------------------------')
