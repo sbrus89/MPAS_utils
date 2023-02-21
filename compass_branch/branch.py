@@ -29,6 +29,9 @@ miniconda_path = cfg['miniconda_path']
 # MPI implementation to use for conda package install
 mpi = cfg['mpi']
 
+# Compiler for conda package install
+compiler = cfg['compiler']
+
 # Make target for MPAS-O compilation
 make_target = cfg['make_target']
 
@@ -171,7 +174,7 @@ if configure_conda == '' or configure_conda == True:
         configure_compass = 'y'
       
     if configure_compass == 'y':
-        subprocess.check_call(f'./conda/configure_compass_env.py --conda {miniconda_path} --mpi {mpi}', shell=True)
+        subprocess.check_call(f'./conda/configure_compass_env.py --conda {miniconda_path} --mpi {mpi} --compiler {compiler}', shell=True)
 
 load_scripts = glob.glob('load_dev_compass*.sh')
 load_script = max(load_scripts, key=os.path.getctime)
