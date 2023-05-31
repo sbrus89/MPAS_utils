@@ -199,6 +199,13 @@ if e3sm_remote != '' and e3sm_branch != '':
   subprocess.check_call(f'module load git; git fetch {e3sm_remote} {e3sm_branch}; git checkout FETCH_HEAD', shell=True)
   update_e3sm_submodules = True
 
+if e3sm_remote != '' and e3sm_branch != '':
+  print('\n')
+  print('------------------------------------------')
+  print('E3SM local merge')
+  print('------------------------------------------')
+  subprocess.check_call(f'module load git; git fetch --all; git rebase origin/master', shell=True)
+  update_e3sm_submodules = True
 
 # Optionally checkout a specific remote E3SM commit
 if e3sm_commit != '':
