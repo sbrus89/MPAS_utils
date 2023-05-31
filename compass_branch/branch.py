@@ -12,15 +12,29 @@ f = open('branch.config','r')
 cfg = yaml.load(f, Loader=yaml.Loader)
 
 # Path to master subtree branch directory
-compass_master = cfg['compass_master']
+compass_master = ''
+if 'compass_master' in cfg:
+    compass_polaris_master = cfg['compass_master']
+    load_env_script = 'load_dev_compass'
+    config_env_script = './conda/configure_compass_env.py'
+    setup_command = 'compass setup'
+    e3sm_dir = 'E3SM-Project'
+
+polaris_master = ''
+if 'polaris_master' in cfg:
+    compass_polaris_master = cfg['polaris_master']
+    load_env_script = 'load_dev_polaris'
+    config_env_script = './configure_polaris_envs.py'
+    setup_command = 'polaris setup'
+    e3sm_dir = 'e3sm_submodules/E3SM-Project'
 
 # Name of subtree branch to create
 branch_name = cfg['branch_name']
 
-# Remote compass branch to checkout  
+# Remote compass/polaris branch to checkout  
 remote_branch = cfg['remote_branch']
 
-# Master compass branch to use for local merge
+# Master compass/polaris branch to use for local merge
 master_branch = cfg['master_branch']
 
 # Path to miniconda installation
@@ -49,7 +63,7 @@ update_branch = ''
 if 'update_branch' in cfg:
     update_branch = cfg['update_branch']
 
-# Option to perform local merge to master compass branch
+# Option to perform local merge to master compass/polaris branch
 local_merge = True
 if 'local_merge' in cfg:
     local_merge = cfg['local_merge']
@@ -97,10 +111,10 @@ if 'e3sm_commit' in cfg:
 
 
 # Enter the master branch subtree directory
-os.chdir(compass_master)
+os.chdir(compass_polaris_master)
 
-# Fetch all remote compass branches
-#   (It is assumed that the remote for the compass branch
+# Fetch all remote compass/polaris branches
+#   (It is assumed that the remote for the compass/polaris branch
 #    that is to be checked out in the next step has been 
 #    added previously)
 print('\n')
@@ -110,7 +124,7 @@ print('------------------------------------------')
 subprocess.check_call('git fetch --all', shell=True)
 
 
-# Create a worktree compass branch to be used for testing 
+# Create a worktree compass/polaris branch to be used for testing 
 print('\n')
 print('------------------------------------------')
 print('Creating worktree branch')
@@ -119,10 +133,12 @@ try:
     subprocess.check_call(f'module load git; git worktree add -b {branch_name} ../{branch_name} {remote_branch}', shell=True)
 except:
     pass
-os.chdir(f'../{branch_name}')
+compass_polaris_branch = '/'.join(compass_polaris_master.split('/')[0:-1])
+compass_polaris_branch = f'{compass_polaris_branch}/{branch_name}'
+os.chdir(compass_polaris_branch)
 
 
-# Optionally update compass branch if a worktree branch has been previously created
+# Optionally update compass/polaris branch if a worktree branch has been previously created
 # and the remote branch has newer commits
 if update_branch == '' or update_branch == True:
     print('\n')
@@ -144,7 +160,7 @@ if update_branch == '' or update_branch == True:
         print('local and remote branches match')
 
 
-# Optionally rebase remote compass branch onto master 
+# Optionally rebase remote compass/polaris branch onto master 
 if local_merge == True:
     print('\n')
     print('------------------------------------------')
@@ -157,7 +173,7 @@ if local_merge == True:
 
 
 # Configure the conda environment for the worktree branch
-load_scripts = glob.glob('load_dev_compass*.sh')
+load_scripts = glob.glob(f'{load_env_script}*.sh')
 if len(load_scripts) == 0:
     configure_conda = True
 if configure_conda == '' or configure_conda == True:
@@ -167,16 +183,16 @@ if configure_conda == '' or configure_conda == True:
     print('------------------------------------------')
     if len(load_scripts) > 0:
         if configure_conda == '':
-            configure_compass = input('load_dev_compass script exists, run configure_compass_env.py again?: (y/n) ')
+            configure_compass = input(f'{load_env_script} script exists, run {config_env_script} again?: (y/n) ')
         else:
             configure_compass = 'y'
     else:
         configure_compass = 'y'
       
     if configure_compass == 'y':
-        subprocess.check_call(f'./conda/configure_compass_env.py --conda {miniconda_path} --mpi {mpi} --compiler {compiler}', shell=True)
+        subprocess.check_call(f'{config_env_script} --conda {miniconda_path} --mpi {mpi} --compiler {compiler}', shell=True)
 
-load_scripts = glob.glob('load_dev_compass*.sh')
+load_scripts = glob.glob(f'{load_env_script}*.sh')
 load_script = max(load_scripts, key=os.path.getctime)
 
 
@@ -190,7 +206,7 @@ update_e3sm_submodules = False
 
 
 # Optionally checkout a specific remote E3SM branch to be used in testing
-os.chdir('E3SM-Project')
+os.chdir(e3sm_dir)
 if e3sm_remote != '' and e3sm_branch != '':
   print('\n')
   print('------------------------------------------')
@@ -224,11 +240,11 @@ if update_e3sm_submodules:
     print('E3SM submodule update')
     print('------------------------------------------')
     subprocess.check_call('module load git; git submodule update --init --recursive', shell=True)
-os.chdir('../')
+os.chdir(compass_polaris_branch)
 
 
 # Compile MPAS-Ocean
-os.chdir('E3SM-Project/components/mpas-ocean')
+os.chdir(f'{e3sm_dir}/components/mpas-ocean')
 if not os.path.exists('ocean_model'):
     compile_mpas = True
 if compile_mpas == '' or compile_mpas == True:
@@ -250,7 +266,7 @@ if compile_mpas == '' or compile_mpas == True:
         use_debug = 'false'
 
     if build == 'y':
-        subprocess.check_call(f'source ../../../{load_script}; make clean; make {make_target} DEBUG={use_debug}', shell=True)
+        subprocess.check_call(f'source {compass_polaris_branch}/{load_script}; make clean; make {make_target} DEBUG={use_debug}', shell=True)
 
 
 # Setup specified testcases
@@ -259,7 +275,7 @@ if setup_testcases == '' or setup_testcases == True:
     print('------------------------------------------')
     print('Setup testcases')
     print('------------------------------------------')
-    os.chdir('../../../')
+    os.chdir(compass_polaris_branch)
     command = f'source ./{load_script}' 
     ntest = 0
     for test in testcases:
@@ -272,7 +288,7 @@ if setup_testcases == '' or setup_testcases == True:
             setup = 'y'
         if setup == 'y':
           ntest = ntest + 1
-          command = command + f'; compass setup -t {test} -w {workdir}'
+          command = command + f'; {setup_command} -t {test} -w {workdir}'
     if ntest > 1:
         subprocess.check_call(command, shell=True)
 
