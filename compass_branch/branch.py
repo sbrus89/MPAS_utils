@@ -31,6 +31,9 @@ if 'polaris_master' in cfg:
 # Name of subtree branch to create
 branch_name = cfg['branch_name']
 
+# Location of compass/polaris remote
+remote = cfg['remote']
+
 # Remote compass/polaris branch to checkout  
 remote_branch = cfg['remote_branch']
 
@@ -64,9 +67,9 @@ if 'update_branch' in cfg:
     update_branch = cfg['update_branch']
 
 # Option to perform local merge to master compass/polaris branch
-local_merge = True
-if 'local_merge' in cfg:
-    local_merge = cfg['local_merge']
+compass_local_merge = True
+if 'compass_local_merge' in cfg:
+    compass_local_merge = cfg['compass_local_merge']
 
 # Option to configure the conda environment
 configure_conda = ''
@@ -98,10 +101,15 @@ e3sm_branch= ''
 if 'e3sm_branch' in cfg:
     e3sm_branch= cfg['e3sm_branch']
 
-# Commit to use for E3SM checkout (optional)
-e3sm_commit= ''
-if 'e3sm_commit' in cfg:
-    e3sm_commit= cfg['e3sm_commit']
+e3sm_local_merge = True
+if 'e3sm_local_merge' in cfg:
+    e3sm_local_merge = cfg['e3sm_local_merge']
+
+load_git_module = 'module load git;'
+try:
+    subprocess.call(load_git_module, shell=True)
+except:
+    load_git_module = ''
 
 
 
@@ -114,14 +122,11 @@ if 'e3sm_commit' in cfg:
 os.chdir(compass_polaris_master)
 
 # Fetch all remote compass/polaris branches
-#   (It is assumed that the remote for the compass/polaris branch
-#    that is to be checked out in the next step has been 
-#    added previously)
 print('\n')
 print('------------------------------------------')
 print('Fetching remote branches')
 print('------------------------------------------')
-subprocess.check_call('git fetch --all', shell=True)
+subprocess.check_call(f'git fetch {remote} {remote_branch}', shell=True)
 
 
 # Create a worktree compass/polaris branch to be used for testing 
@@ -130,9 +135,12 @@ print('------------------------------------------')
 print('Creating worktree branch')
 print('------------------------------------------')
 try:
-    subprocess.check_call(f'module load git; git worktree add -b {branch_name} ../{branch_name} {remote_branch}', shell=True)
+    #subprocess.check_call(f'{load_git_module} git worktree add -b {branch_name} ../{branch_name} {remote_branch}', shell=True)
+    subprocess.check_call(f'{load_git_module} git worktree add -b {branch_name} ../{branch_name} FETCH_HEAD', shell=True)
 except:
     pass
+
+# Change to compass/polaris worktree directory
 compass_polaris_branch = '/'.join(compass_polaris_master.split('/')[0:-1])
 compass_polaris_branch = f'{compass_polaris_branch}/{branch_name}'
 os.chdir(compass_polaris_branch)
@@ -145,8 +153,9 @@ if update_branch == '' or update_branch == True:
     print('------------------------------------------')
     print('Updating branch')
     print('------------------------------------------')
-    local = subprocess.check_output(f'module load git; git log -1 --oneline', shell=True)
-    remote = subprocess.check_output(f'module load git; git log -1 --oneline {remote_branch}', shell=True)
+    subprocess.check_call(f'git fetch {remote} {remote_branch}', shell=True)
+    local = subprocess.check_output(f'{load_git_module} git log -1 --oneline', shell=True)
+    remote = subprocess.check_output(f'{load_git_module} git log -1 --oneline FETCH_HEAD', shell=True)
     if local.split()[0].decode('utf-8') != remote.split()[0].decode('utf-8'):
         print(local)
         print(remote)
@@ -155,21 +164,22 @@ if update_branch == '' or update_branch == True:
         else:
             update = 'y'
         if update == 'y':
-            subprocess.check_call(f'module load git; git reset --hard {remote_branch}', shell=True)
+            subprocess.check_call(f'{load_git_module} git reset --hard FETCH_HEAD', shell=True)
     else:
         print('local and remote branches match')
 
 
 # Optionally rebase remote compass/polaris branch onto master 
-if local_merge == True:
+if compass_local_merge == True:
     print('\n')
     print('------------------------------------------')
     print('Perform local merge')
     print('------------------------------------------')
     
-    #subprocess.check_call(f'module load git; git reset --hard {master_branch}', shell=True)
-    #subprocess.check_call(f'module load git; git merge --no-ff {remote_branch}', shell=True)
-    subprocess.check_call(f'module load git; git rebase {master_branch}', shell=True)
+    subprocess.check_call('git fetch --all', shell=True)
+    #subprocess.check_call(f'{load_git_module} git reset --hard {master_branch}', shell=True)
+    #subprocess.check_call(f'{load_git_module} git merge --no-ff {remote_branch}', shell=True)
+    subprocess.check_call(f'{load_git_module} git rebase {master_branch}', shell=True)
 
 
 # Configure the conda environment for the worktree branch
@@ -201,7 +211,7 @@ print('\n')
 print('------------------------------------------')
 print('Compass submodule checkout')
 print('------------------------------------------')
-subprocess.check_call('module load git; git submodule update --init --recursive', shell=True)
+subprocess.check_call(f'{load_git_module} git submodule update --init --recursive', shell=True)
 update_e3sm_submodules = False
 
 
@@ -212,26 +222,16 @@ if e3sm_remote != '' and e3sm_branch != '':
   print('------------------------------------------')
   print('E3SM remote checkout')
   print('------------------------------------------')
-  subprocess.check_call(f'module load git; git fetch {e3sm_remote} {e3sm_branch}; git checkout FETCH_HEAD', shell=True)
+  subprocess.check_call(f'{load_git_module} git fetch {e3sm_remote} {e3sm_branch}; git checkout FETCH_HEAD', shell=True)
   update_e3sm_submodules = True
 
-if e3sm_remote != '' and e3sm_branch != '':
+if e3sm_local_merge:
   print('\n')
   print('------------------------------------------')
   print('E3SM local merge')
   print('------------------------------------------')
-  subprocess.check_call(f'module load git; git fetch --all; git rebase origin/master', shell=True)
+  subprocess.check_call(f'{load_git_module} git fetch --all; git rebase origin/master', shell=True)
   update_e3sm_submodules = True
-
-# Optionally checkout a specific remote E3SM commit
-if e3sm_commit != '':
-  print('\n')
-  print('------------------------------------------')
-  print('E3SM commit checkout')
-  print('------------------------------------------')
-  subprocess.check_call(f'git checkout {e3sm_commit}', shell=True)
-  update_e3sm_submodules = True
-
 
 # Perform E3SM submodule checkout if E3SM commit has been updated
 if update_e3sm_submodules:
@@ -239,7 +239,7 @@ if update_e3sm_submodules:
     print('------------------------------------------')
     print('E3SM submodule update')
     print('------------------------------------------')
-    subprocess.check_call('module load git; git submodule update --init --recursive', shell=True)
+    subprocess.check_call(f'{load_git_module} git submodule update --init --recursive', shell=True)
 os.chdir(compass_polaris_branch)
 
 
@@ -289,7 +289,7 @@ if setup_testcases == '' or setup_testcases == True:
         if setup == 'y':
           ntest = ntest + 1
           command = command + f'; {setup_command} -t {test} -w {workdir}'
-    if ntest > 1:
+    if ntest > 0:
         subprocess.check_call(command, shell=True)
 
 
