@@ -2,13 +2,18 @@ import os
 import subprocess
 import yaml
 import glob
+import sys
 
 
 ####################################################
 # Handle input options
 ####################################################
 
-f = open('branch.config','r')
+cfg_file = 'branch.cfg'
+if len(sys.argv) == 2:
+  cfg_file = sys.argv[1]
+
+f = open(cfg_file,'r')
 cfg = yaml.load(f, Loader=yaml.Loader)
 
 # Path to master subtree branch directory
@@ -38,7 +43,9 @@ remote = cfg['remote']
 remote_branch = cfg['remote_branch']
 
 # Master compass/polaris branch to use for local merge
-master_branch = cfg['master_branch']
+package_main_branch = 'origin/master'
+if 'package_main_branch' in cfg:
+    package_main_branch = cfg['package_main_branch']
 
 # Path to miniconda installation
 miniconda_path = cfg['miniconda_path']
@@ -67,9 +74,9 @@ if 'update_branch' in cfg:
     update_branch = cfg['update_branch']
 
 # Option to perform local merge to master compass/polaris branch
-compass_local_merge = True
-if 'compass_local_merge' in cfg:
-    compass_local_merge = cfg['compass_local_merge']
+package_local_merge = True
+if 'package_local_merge' in cfg:
+    package_local_merge = cfg['package_local_merge']
 
 # Option to configure the conda environment
 configure_conda = ''
@@ -170,16 +177,16 @@ if update_branch == '' or update_branch == True:
 
 
 # Optionally rebase remote compass/polaris branch onto master 
-if compass_local_merge == True:
+if package_local_merge == True:
     print('\n')
     print('------------------------------------------')
     print('Perform local merge')
     print('------------------------------------------')
     
     subprocess.check_call('git fetch --all', shell=True)
-    #subprocess.check_call(f'{load_git_module} git reset --hard {master_branch}', shell=True)
+    #subprocess.check_call(f'{load_git_module} git reset --hard {package_main_branch}', shell=True)
     #subprocess.check_call(f'{load_git_module} git merge --no-ff {remote_branch}', shell=True)
-    subprocess.check_call(f'{load_git_module} git rebase {master_branch}', shell=True)
+    subprocess.check_call(f'{load_git_module} git rebase {package_main_branch}', shell=True)
 
 
 # Configure the conda environment for the worktree branch
