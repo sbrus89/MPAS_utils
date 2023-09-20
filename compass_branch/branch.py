@@ -62,6 +62,9 @@ make_target = cfg['make_target']
 # Option for using debug flags for MPAS-O compilation
 debug = cfg['debug']
 
+# Option for using OpenMP for MPAS-O compilation
+openmp = cfg['openmp']
+
 # List of testcases to setup
 testcases = cfg['testcases']
 
@@ -272,8 +275,13 @@ if compile_mpas == '' or compile_mpas == True:
     else:
         use_debug = 'false'
 
+    if openmp:
+        use_openmp = 'true'
+    else:
+        use_openmp = 'false'
+
     if build == 'y':
-        subprocess.check_call(f'source {compass_polaris_branch}/{load_script}; make clean; make {make_target} DEBUG={use_debug}', shell=True)
+        subprocess.check_call(f'source {compass_polaris_branch}/{load_script}; make clean; make {make_target} DEBUG={use_debug} OPENMP={use_openmp}', shell=True)
 
 
 # Setup specified testcases
