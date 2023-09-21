@@ -23,6 +23,7 @@ if 'compass_master' in cfg:
     load_env_script = 'load_dev_compass'
     config_env_script = './conda/configure_compass_env.py'
     setup_command = 'compass setup'
+    suite_command = 'compass suite -s -c ocean'
     e3sm_dir = 'E3SM-Project'
 
 polaris_master = ''
@@ -31,6 +32,7 @@ if 'polaris_master' in cfg:
     load_env_script = 'load_dev_polaris'
     config_env_script = './configure_polaris_envs.py'
     setup_command = 'polaris setup'
+    suite_command = 'polaris suite -c ocean'
     e3sm_dir = 'e3sm_submodules/E3SM-Project'
 
 # Name of subtree branch to create
@@ -66,7 +68,14 @@ debug = cfg['debug']
 openmp = cfg['openmp']
 
 # List of testcases to setup
-testcases = cfg['testcases']
+testcases = []
+if 'testcases' in cfg:
+    testcases = cfg['testcases']
+
+# List of suites to setup
+suites = []
+if 'suites' in cfg:
+    suites = cfg['suites']
 
 # Work directory to use for test case setup
 workdir = cfg['workdir']
@@ -111,7 +120,7 @@ e3sm_branch= ''
 if 'e3sm_branch' in cfg:
     e3sm_branch= cfg['e3sm_branch']
 
-e3sm_local_merge = True
+e3sm_local_merge = False
 if 'e3sm_local_merge' in cfg:
     e3sm_local_merge = cfg['e3sm_local_merge']
 
@@ -307,7 +316,6 @@ if setup_testcases == '' or setup_testcases == True:
     if ntest > 0:
         subprocess.check_call(command, shell=True)
 
-
 # Run specified testcases as batch jobs with dependencies
 if run:
     print('\n')
@@ -321,3 +329,18 @@ if run:
             print(output) 
             jobid = output.split()[-1].decode('utf-8')
             dependency = f'--dependency=afterok:{jobid}' 
+
+if setup_testcases == True:
+    print('\n')
+    print('------------------------------------------')
+    print('Setup suites')
+    print('------------------------------------------')
+    os.chdir(compass_polaris_branch)
+    command = f'source ./{load_script}' 
+    nsuite = 0
+    for suite in suites:
+        nsuite = nsuite + 1
+        command = command + f'; {suite_command} -t {suite} -w {workdir}'
+    if nsuite > 0:
+        subprocess.check_call(command, shell=True)
+
