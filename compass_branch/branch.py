@@ -110,6 +110,11 @@ run = ''
 if 'run' in cfg:
     run = cfg['run']
 
+# Path of baseline for comparison
+baseline = ''
+if 'baseline' in cfg:
+    baseline = cfg['baseline']
+
 # Remote to use for E3SM checkout (optional)
 e3sm_remote= ''
 if 'e3sm_remote' in cfg:
@@ -313,6 +318,8 @@ if setup_testcases == '' or setup_testcases == True:
         if setup == 'y':
           ntest = ntest + 1
           command = command + f'; {setup_command} -t {test} -w {workdir}'
+          if baseline != '':
+              command = command + f' -b {baseline}'
     if ntest > 0:
         subprocess.check_call(command, shell=True)
 
@@ -341,6 +348,8 @@ if setup_testcases == True:
     for suite in suites:
         nsuite = nsuite + 1
         command = command + f'; {suite_command} -t {suite} -w {workdir}'
+        if baseline != '':
+            command = command + f' -b {baseline}'
     if nsuite > 0:
         subprocess.check_call(command, shell=True)
 
