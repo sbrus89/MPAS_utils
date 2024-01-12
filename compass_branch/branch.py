@@ -331,11 +331,11 @@ if run:
     print('------------------------------------------')
     dependency = ''
     for test in testcases:
-            os.chdir(f'{workdir}/{test}')
-            output = subprocess.check_output(f'sbatch {dependency} job_script.sh', shell=True)
-            print(output) 
-            jobid = output.split()[-1].decode('utf-8')
-            dependency = f'--dependency=afterok:{jobid}' 
+        os.chdir(f'{workdir}/{test}')
+        output = subprocess.check_output(f'sbatch {dependency} job_script.sh', shell=True)
+        print(output) 
+        jobid = output.split()[-1].decode('utf-8')
+        dependency = f'--dependency=afterok:{jobid}' 
 
 if setup_testcases == True:
     print('\n')
@@ -353,3 +353,16 @@ if setup_testcases == True:
     if nsuite > 0:
         subprocess.check_call(command, shell=True)
 
+# Run specified suites as batch jobs with dependencies
+if run:
+    print('\n')
+    print('------------------------------------------')
+    print('Run suites')
+    print('------------------------------------------')
+    dependency = ''
+    os.chdir(f'{workdir}')
+    for suite in suites:
+        output = subprocess.check_output(f'sbatch {dependency} job_script.{suite}.sh', shell=True)
+        print(output) 
+        jobid = output.split()[-1].decode('utf-8')
+        dependency = f'--dependency=afterok:{jobid}' 
