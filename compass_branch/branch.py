@@ -115,6 +115,11 @@ baseline = ''
 if 'baseline' in cfg:
     baseline = cfg['baseline']
 
+# Path of additional config file
+config_file = ''
+if 'config_file' in cfg:
+    config_file = cfg['config_file']
+
 # Remote to use for E3SM checkout (optional)
 e3sm_remote= ''
 if 'e3sm_remote' in cfg:
@@ -131,7 +136,9 @@ if 'e3sm_local_merge' in cfg:
 
 load_git_module = 'module load git;'
 try:
-    subprocess.call(load_git_module, shell=True)
+    output = subprocess.check_output(load_git_module, shell=True)
+    if 'error' in output.lower():
+       load_git_module = ''
 except:
     load_git_module = ''
 
@@ -320,6 +327,8 @@ if setup_testcases == '' or setup_testcases == True:
           command = command + f'; {setup_command} -t {test} -w {workdir}'
           if baseline != '':
               command = command + f' -b {baseline}'
+          if config_file != '':
+              command = command + f' -f {config_file}'
     if ntest > 0:
         subprocess.check_call(command, shell=True)
 
@@ -350,6 +359,8 @@ if setup_testcases == True:
         command = command + f'; {suite_command} -t {suite} -w {workdir}'
         if baseline != '':
             command = command + f' -b {baseline}'
+        if config_file != '':
+            command = command + f' -f {config_file}'
     if nsuite > 0:
         subprocess.check_call(command, shell=True)
 
