@@ -16,6 +16,13 @@ if len(sys.argv) == 2:
 f = open(cfg_file,'r')
 cfg = yaml.load(f, Loader=yaml.Loader)
 
+model = 'mpas-ocean'
+if 'model' in cfg:
+    model = cfg['model']
+if model != 'mpas-ocean' and model != 'omega':
+    print('unknown model name')
+    raise SystemExit(0)
+
 # Path to master subtree branch directory
 compass_master = ''
 if 'compass_master' in cfg:
@@ -32,8 +39,11 @@ if 'polaris_master' in cfg:
     load_env_script = 'load_dev_polaris'
     config_env_script = './configure_polaris_envs.py'
     setup_command = 'polaris setup'
-    suite_command = 'polaris suite -c ocean'
-    e3sm_dir = 'e3sm_submodules/E3SM-Project'
+    suite_command = f'polaris suite -c ocean --model={model}'
+    if model == 'mpas-ocean':
+        e3sm_dir = 'e3sm_submodules/E3SM-Project'
+    elif model == 'omega':
+        e3sm_dir = 'e3sm_submodules/Omega'
 
 # Name of subtree branch to create
 branch_name = cfg['branch_name']
@@ -57,6 +67,12 @@ mpi = cfg['mpi']
 
 # Compiler for conda package install
 compiler = cfg['compiler']
+
+# Machine name
+machine = cfg['machine']
+
+# Parmetis path
+parmetis = cfg['parmetis']
 
 # Make target for MPAS-O compilation
 make_target = cfg['make_target']
@@ -96,9 +112,9 @@ if 'configure_conda' in cfg:
     configure_conda = cfg['configure_conda']
 
 # Option to compile MPAS-O
-compile_mpas = ''
-if 'compile_mpas' in cfg:
-    compile_mpas = cfg['compile_mpas']
+compile_model = ''
+if 'compile_model' in cfg:
+    compile_model = cfg['compile_model']
 
 # Option to setup list of testcases
 setup_testcases = ''
@@ -274,35 +290,53 @@ if update_e3sm_submodules:
 os.chdir(compass_polaris_branch)
 
 
-# Compile MPAS-Ocean
-os.chdir(f'{e3sm_dir}/components/mpas-ocean')
-if not os.path.exists('ocean_model'):
-    compile_mpas = True
-if compile_mpas == '' or compile_mpas == True:
-    print('\n')
-    print('------------------------------------------')
-    print('Compile MPAS-Ocean')
-    print('------------------------------------------')
-    if compile_mpas == '':
-        if os.path.exists('ocean_model'):
-            build = input('ocean_model executable exists, re-compile?: (y/n) ')
+if model == 'mpas-ocean':
+    # Compile MPAS-Ocean
+    model_path = f'{e3sm_dir}/components/mpas-ocean'
+    os.chdir(model_path)
+    if not os.path.exists('ocean_model'):
+        compile_model = True
+    if compile_model == '' or compile_model == True:
+        print('\n')
+        print('------------------------------------------')
+        print('Compile MPAS-Ocean')
+        print('------------------------------------------')
+        if compile_model == '':
+            if os.path.exists('ocean_model'):
+                build = input('ocean_model executable exists, re-compile?: (y/n) ')
+            else:
+                build = 'y'
         else:
             build = 'y'
-    else:
-        build = 'y'
+        
+        if debug:
+            use_debug = 'true'
+        else:
+            use_debug = 'false'
     
-    if debug:
-        use_debug = 'true'
-    else:
-        use_debug = 'false'
+        if openmp:
+            use_openmp = 'true'
+        else:
+            use_openmp = 'false'
+    
+        if build == 'y':
+            subprocess.check_call(f'source {compass_polaris_branch}/{load_script}; make clean; make {make_target} DEBUG={use_debug} OPENMP={use_openmp}', shell=True)
 
-    if openmp:
-        use_openmp = 'true'
-    else:
-        use_openmp = 'false'
-
-    if build == 'y':
-        subprocess.check_call(f'source {compass_polaris_branch}/{load_script}; make clean; make {make_target} DEBUG={use_debug} OPENMP={use_openmp}', shell=True)
+if model == 'omega':
+    # Compile Omega
+    model_path = f'{e3sm_dir}/components/omega/build'
+    os.chdir(f'{e3sm_dir}/components/omega')
+    if not os.path.exists(f'{model_path}/src/omega.exe'):
+        compile_model = True
+    if compile_model == '' or compile_model == True:
+        print('\n')
+        print('------------------------------------------')
+        print('Compile Omega')
+        print('------------------------------------------')
+        os.makedirs('build', exist_ok=True)
+        os.chdir('build')
+        subprocess.check_call(f'module load cmake; cmake -DOMEGA_CIME_COMPILER={compiler} -DOMEGA_CIME_MACHINE={machine} -DOMEGA_PARMETIS_ROOT={parmetis} -DOMEGA_BUILD_TEST=ON -S .. -B .',shell=True)
+        subprocess.check_call('./omega_build.sh')
 
 
 # Setup specified testcases
