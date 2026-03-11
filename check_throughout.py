@@ -18,25 +18,30 @@ import argparse
 class SimulationThroughputMonitor:
     """Monitor simulation log files and calculate throughput metrics."""
     
-    def __init__(self, log_file: str, check_interval: float = 60.0, 
-                 config_file: Optional[str] = None):
+    def __init__(self, run_dir: str, check_interval: float = 60.0):
         """
         Initialize the throughput monitor.
-        
+
         Args:
-            log_file: Path to the simulation log file
+            run_dir: Path to the simulation run directory
             check_interval: Time between checks in wall clock seconds
-            config_file: Optional path to configuration file
         """
-        self.log_file = Path(log_file)
+        run_dir = Path(run_dir)
+        self.log_file = run_dir / 'log.ocean.0000.out'
         self.check_interval = check_interval
-        self.config_file = Path(config_file) if config_file else None
+        self.config_file = run_dir / 'namelist.ocean'
         
         self.timestamp_pattern = re.compile(
             r'Doing timestep (\d{4}-\d{2}-\d{2}_\d{2}:\d{2}:\d{2})'
         )
         self.config_duration_pattern = re.compile(
-            r"config_run_duration\s*=\s*['\"](\d+)_(\d{2}):(\d{2}):(\d{2})['\"]"
+            r"config_run_duration\s*=\s*['\"](?:(\d+)-)?(?:(\d+)-)?(\d+)_(\d{2}):(\d{2}):(\d{2})['\"]"
+        )
+        self.config_start_time_pattern = re.compile(
+            r"config_start_time\s*=\s*['\"](\d{4}-\d{2}-\d{2}_\d{2}:\d{2}:\d{2})['\"]"
+        )
+        self.config_stop_time_pattern = re.compile(
+            r"config_stop_time\s*=\s*['\"](\d{4}-\d{2}-\d{2}_\d{2}:\d{2}:\d{2})['\"]"
         )
         
         # Store previous measurement
@@ -44,9 +49,7 @@ class SimulationThroughputMonitor:
         self.prev_wall_time: Optional[float] = None
         
         # Store run duration if available
-        self.run_duration: Optional[timedelta] = None
-        if self.config_file:
-            self.run_duration = self.parse_run_duration()
+        self.run_duration: Optional[timedelta] = self.parse_run_duration()
         
     def parse_simulation_time(self, timestamp_str: str) -> datetime:
         """
@@ -63,36 +66,68 @@ class SimulationThroughputMonitor:
     def parse_run_duration(self) -> Optional[timedelta]:
         """
         Parse the run duration from the configuration file.
-        
+
+        Falls back to config_stop_time - config_start_time if config_run_duration
+        is not available or set to 'none'.
+
         Returns:
             timedelta representing the total run duration, or None if not found
         """
-        if not self.config_file or not self.config_file.exists():
+        if not self.config_file.exists():
             return None
-        
+
+        start_time = None
+        stop_time = None
+
         try:
             with open(self.config_file, 'r') as f:
                 for line in f:
                     match = self.config_duration_pattern.search(line)
                     if match:
-                        days = int(match.group(1))
-                        hours = int(match.group(2))
-                        minutes = int(match.group(3))
-                        seconds = int(match.group(4))
-                        
+                        # Groups 1 and 2 are optional (years, months)
+                        # If only one prefix is present it's months, not years
+                        if match.group(1) is not None and match.group(2) is not None:
+                            years = int(match.group(1))
+                            months = int(match.group(2))
+                        elif match.group(1) is not None:
+                            years = 0
+                            months = int(match.group(1))
+                        else:
+                            years = 0
+                            months = 0
+                        days = int(match.group(3))
+                        hours = int(match.group(4))
+                        minutes = int(match.group(5))
+                        seconds = int(match.group(6))
+
                         duration = timedelta(
-                            days=days,
+                            days=years * 365 + months * 30 + days,
                             hours=hours,
                             minutes=minutes,
                             seconds=seconds
                         )
                         print(f"Found run duration in config: {self.format_duration(duration)}")
                         return duration
+
+                    match = self.config_start_time_pattern.search(line)
+                    if match:
+                        start_time = self.parse_simulation_time(match.group(1))
+
+                    match = self.config_stop_time_pattern.search(line)
+                    if match:
+                        stop_time = self.parse_simulation_time(match.group(1))
         except Exception as e:
             print(f"Error reading config file: {e}")
             return None
-        
-        print(f"Warning: config_run_duration not found in {self.config_file}")
+
+        # Fall back to config_stop_time - config_start_time
+        if start_time is not None and stop_time is not None:
+            duration = stop_time - start_time
+            print(f"config_run_duration not available; using "
+                  f"config_stop_time - config_start_time: {self.format_duration(duration)}")
+            return duration
+
+        print(f"Warning: could not determine run duration from {self.config_file}")
         return None
     
     def format_duration(self, duration: timedelta) -> str:
@@ -340,8 +375,7 @@ class SimulationThroughputMonitor:
         
         print(f"Starting simulation throughput monitor...")
         print(f"Log file: {self.log_file}")
-        if self.config_file:
-            print(f"Config file: {self.config_file}")
+        print(f"Config file: {self.config_file}")
         print(f"Check interval: {self.check_interval} seconds")
         print(f"Duration: {'Infinite' if duration is None else f'{duration} seconds'}")
         print("\nMonitoring...\n")
@@ -400,8 +434,8 @@ def main():
         description='Monitor simulation log file and calculate throughput'
     )
     parser.add_argument(
-        'log_file',
-        help='Path to the simulation log file'
+        'run_dir',
+        help='Path to the simulation run directory'
     )
     parser.add_argument(
         '-i', '--interval',
@@ -416,12 +450,6 @@ def main():
         help='Total monitoring duration in seconds (default: infinite)'
     )
     parser.add_argument(
-        '-c', '--config',
-        type=str,
-        default=None,
-        help='Path to configuration file for completion projection'
-    )
-    parser.add_argument(
         '-q', '--quiet',
         action='store_true',
         help='Suppress verbose output'
@@ -430,9 +458,8 @@ def main():
     args = parser.parse_args()
     
     monitor = SimulationThroughputMonitor(
-        log_file=args.log_file,
+        run_dir=args.run_dir,
         check_interval=args.interval,
-        config_file=args.config
     )
     
     monitor.monitor(
